@@ -1,11 +1,13 @@
-import streamlit as st
+import os
 import pandas as pd
-import hashlib
+import streamlit as st
 
-st.set_page_config(
-    page_title="MADI – Módulo de Análisis de Datos Institucionales",
-    layout="wide"
-)
+# Ruta donde se guardarán los archivos cargados
+ruta_archivos = "archivos_cargados"
+
+# Verifica si la carpeta de archivos existe, si no, la crea
+if not os.path.exists(ruta_archivos):
+    os.makedirs(ruta_archivos)
 
 # Simulación de base de datos de usuarios
 if "usuarios" not in st.session_state:
@@ -20,7 +22,7 @@ def hashear(texto):
 # Pantalla de inicio
 st.markdown("""
     <h1 style='color:#6a1b9a;text-align:center;'>📊 MADI</h1>
-    <h3 style='text-align:center;'>Módulo de Análisis de Matrículas Universitarias</h3>
+    <h3 style='text-align:center;'>Módulo de Análisis de Datos Institucionales</h3>
     <p style='text-align:center;'>Visualiza y analiza datos de matrículas universitarias en Colombia</p>
 """, unsafe_allow_html=True)
 
@@ -49,7 +51,7 @@ if menu == "Registrarse":
             st.sidebar.success("✅ Registro exitoso. Ahora puedes iniciar sesión.")
 
 if menu == "Iniciar sesión":
-    st.sidebar.subheader("🔑 Iniciar sesión")
+    st.sidebar.subheader("🔐 Iniciar sesión")
     correo = st.sidebar.text_input("Correo electrónico")
     clave = st.sidebar.text_input("Contraseña", type="password")
     iniciar = st.sidebar.button("Iniciar sesión")
@@ -86,8 +88,14 @@ if st.session_state.rol == "Administrador":
         ]
 
         for archivo in archivos:
+            # Guardar el archivo en el sistema de archivos
+            archivo_path = os.path.join(ruta_archivos, archivo.name)
+            with open(archivo_path, "wb") as f:
+                f.write(archivo.getbuffer())
+            
+            # Cargar el archivo para procesarlo
             try:
-                df = pd.read_excel(archivo)
+                df = pd.read_excel(archivo_path)
                 df.columns = df.columns.str.strip().str.upper()
                 columnas_encontradas = [col for col in columnas_deseadas if col in df.columns]
                 if len(columnas_encontradas) >= 4:
@@ -117,7 +125,7 @@ elif st.session_state.rol == "Usuario":
     st.subheader("🔍 Consulta interactiva de matrículas")
 
     if st.session_state["datos"] is None:
-        st.info("📉 Aún no se han cargado datos. Espera a que el administrador suba el archivo.")
+        st.info("📊 Aún no se han cargado datos. Espera a que el administrador suba el archivo.")
     else:
         df = st.session_state["datos"]
 
@@ -128,8 +136,8 @@ elif st.session_state.rol == "Usuario":
             with col2:
                 universidad = st.selectbox("🏫 Universidad", sorted(df["Universidad"].dropna().unique()))
             with col3:
-                programa = st.selectbox("🎓 Programa", sorted(df["Programa"].dropna().unique()))
-            semestre = st.selectbox("📚 Semestre", sorted(df["Semestre"].dropna().unique()))
+                programa = st.selectbox("📚 Programa", sorted(df["Programa"].dropna().unique()))
+            semestre = st.selectbox("📅 Semestre", sorted(df["Semestre"].dropna().unique()))
 
         filtro = (
             (df["Año"] == año) &
@@ -142,7 +150,7 @@ elif st.session_state.rol == "Usuario":
         st.subheader("📊 Resultados")
         if not resultado.empty:
             total = resultado["Número de matriculados"].sum()
-            st.markdown(f"<h4 style='color:#2e7d32;'>👨‍🎓 Total de matriculados: <strong>{int(total):,}</strong></h4>", unsafe_allow_html=True)
+            st.markdown(f"<h4 style='color:#2e7d32;'>👩‍🎓 Total de matriculados: <strong>{int(total):,}</strong></h4>", unsafe_allow_html=True)
             st.dataframe(resultado, use_container_width=True)
         else:
             st.warning("❌ No se encontraron resultados con esos filtros.")
