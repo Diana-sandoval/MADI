@@ -4,7 +4,6 @@ import hashlib
 
 st.set_page_config(
     page_title="MADI – Módulo de Análisis de Datos Institucionales",
-    page_icon="📊",
     layout="wide"
 )
 
