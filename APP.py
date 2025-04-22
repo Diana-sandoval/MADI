@@ -2,56 +2,75 @@ import streamlit as st
 import pandas as pd
 import hashlib
 
-# Configuración general de la página
 st.set_page_config(
     page_title="MADI – Módulo de Análisis de Datos Institucionales",
     page_icon="📊",
     layout="wide"
 )
 
-# Base de usuarios simulada (puede conectarse con una base real si se desea)
-usuarios = {
-    "admin@madi.com": {"password": "admin123", "rol": "Administrador"},
-    "usuario@madi.com": {"password": "usuario123", "rol": "Usuario"}
-}
+# Simulación de base de datos de usuarios (almacenada en sesión)
+if "usuarios" not in st.session_state:
+    st.session_state.usuarios = {
+        "admin@madi.com": {"password": "admin123", "rol": "Administrador"}
+    }
 
-# Función para hashear contraseñas (simulación básica)
+# Función para hashear contraseñas
 def hashear(texto):
     return hashlib.sha256(texto.encode()).hexdigest()
 
-# Interfaz de inicio de sesión
+# Pantalla de inicio
 st.markdown("""
     <h1 style='color:#6a1b9a;text-align:center;'>📊 MADI</h1>
     <h3 style='text-align:center;'>Módulo de Análisis de Datos Institucionales</h3>
     <p style='text-align:center;'>Visualiza y analiza datos de matrículas universitarias en Colombia</p>
 """, unsafe_allow_html=True)
 
-st.sidebar.title("🔐 Inicio de sesión")
-correo = st.sidebar.text_input("Correo electrónico")
-clave = st.sidebar.text_input("Contraseña", type="password")
-iniciar = st.sidebar.button("Iniciar sesión")
+# Autenticación y registro
+menu = st.sidebar.radio("Selecciona una opción", ["Iniciar sesión", "Registrarse"])
 
 if "autenticado" not in st.session_state:
     st.session_state.autenticado = False
+    st.session_state.usuario = None
     st.session_state.rol = None
 
-if iniciar:
-    if correo in usuarios and clave == usuarios[correo]["password"]:
-        st.session_state.autenticado = True
-        st.session_state.rol = usuarios[correo]["rol"]
-        st.success(f"Bienvenido {correo} ({st.session_state.rol})")
-    else:
-        st.error("Correo o contraseña incorrectos")
+if menu == "Registrarse":
+    st.sidebar.subheader("📝 Crear una cuenta")
+    nuevo_correo = st.sidebar.text_input("Correo electrónico")
+    nueva_clave = st.sidebar.text_input("Contraseña", type="password")
+    boton_registro = st.sidebar.button("Registrarse")
 
-# Si no está autenticado, se detiene todo
+    if boton_registro:
+        if nuevo_correo in st.session_state.usuarios:
+            st.sidebar.warning("⚠️ Este correo ya está registrado.")
+        else:
+            st.session_state.usuarios[nuevo_correo] = {
+                "password": nueva_clave,
+                "rol": "Usuario"
+            }
+            st.sidebar.success("✅ Registro exitoso. Ahora puedes iniciar sesión.")
+
+if menu == "Iniciar sesión":
+    st.sidebar.subheader("🔐 Iniciar sesión")
+    correo = st.sidebar.text_input("Correo electrónico")
+    clave = st.sidebar.text_input("Contraseña", type="password")
+    iniciar = st.sidebar.button("Iniciar sesión")
+
+    if iniciar:
+        if correo in st.session_state.usuarios and clave == st.session_state.usuarios[correo]["password"]:
+            st.session_state.autenticado = True
+            st.session_state.usuario = correo
+            st.session_state.rol = st.session_state.usuarios[correo]["rol"]
+            st.success(f"Bienvenido {correo} ({st.session_state.rol})")
+        else:
+            st.sidebar.error("Correo o contraseña incorrectos")
+
 if not st.session_state.autenticado:
     st.stop()
 
-# Inicializar datos en sesión
 if "datos" not in st.session_state:
     st.session_state["datos"] = None
 
-# Funcionalidad para el Administrador
+# Administrador
 if st.session_state.rol == "Administrador":
     st.subheader("🛠️ Zona de administración")
     archivo = st.file_uploader("📤 Subir archivo Excel con datos de matrícula", type=["xlsx"])
@@ -59,10 +78,25 @@ if st.session_state.rol == "Administrador":
     if archivo:
         try:
             df = pd.read_excel(archivo)
-            columnas_deseadas = ["Año", "Universidad", "Programa", "Semestre", "Sexo", "Número de matriculados"]
+            columnas_deseadas = [
+                "AÑO",
+                "INSTITUCIÓN DE EDUCACIÓN SUPERIOR (IES)",
+                "PROGRAMA ACADÉMICO",
+                "SEMESTRE",
+                "SEXO",
+                "MATRICULADOS"
+            ]
             columnas_encontradas = [col for col in columnas_deseadas if col in df.columns]
             if len(columnas_encontradas) >= 4:
                 df = df[columnas_encontradas]
+                df = df.rename(columns={
+                    "AÑO": "Año",
+                    "INSTITUCIÓN DE EDUCACIÓN SUPERIOR (IES)": "Universidad",
+                    "PROGRAMA ACADÉMICO": "Programa",
+                    "SEMESTRE": "Semestre",
+                    "SEXO": "Sexo",
+                    "MATRICULADOS": "Número de matriculados"
+                })
                 st.session_state["datos"] = df
                 st.success("✅ Archivo cargado correctamente")
                 st.dataframe(df.head(), use_container_width=True)
@@ -71,7 +105,7 @@ if st.session_state.rol == "Administrador":
         except Exception as e:
             st.error(f"❌ Error al leer el archivo: {e}")
 
-# Funcionalidad para el Usuario
+# Usuario
 elif st.session_state.rol == "Usuario":
     st.subheader("🔍 Consulta interactiva de matrículas")
 
@@ -106,8 +140,9 @@ elif st.session_state.rol == "Usuario":
         else:
             st.warning("❌ No se encontraron resultados con esos filtros.")
 
-# Pie de página personalizado
+# Pie de página
 st.markdown("""
     <hr style='border:1px solid #ccc;'>
     <p style='text-align:center; font-size:14px;'>Desarrollado por Diana Sandoval & Maria Pulido • Proyecto MADI © 2025</p>
 """, unsafe_allow_html=True)
+
