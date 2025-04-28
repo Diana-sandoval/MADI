@@ -208,7 +208,6 @@ if conexion:
 
             if dfs:
                 df_consolidado = pd.concat(dfs, ignore_index=True)
-                cargar_datos(df_consolidado)
                 st.success("✅ Datos cargados exitosamente.")
                 st.dataframe(df_consolidado.head(), use_container_width=True)
 
