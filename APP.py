@@ -58,17 +58,40 @@ if not cursor.fetchone():
 st.markdown("""
     <style>
     body {
-        background-color: #f3e5f5;
+        background-color: #f4f7f6;
+        font-family: 'Arial', sans-serif;
     }
     .stButton>button {
-        background-color: #8e24aa;
+        background-color: #5e35b1;
         color: white;
+        font-weight: bold;
+    }
+    .stButton>button:hover {
+        background-color: #512da8;
     }
     .stSelectbox, .stTextInput, .stFileUploader, .stDataFrame {
-        background-color: #f8bbd0;
+        background-color: #e1bee7;
+        border-radius: 5px;
+        padding: 10px;
     }
     h1, h3, p, h4 {
-        color: #6a1b9a;
+        color: #512da8;
+        font-weight: bold;
+    }
+    .stTextInput, .stSelectbox {
+        width: 100%;
+    }
+    .stSidebar {
+        background-color: #f1e6f5;
+        border-right: 2px solid #d1c4e9;
+    }
+    .stSelectbox, .stTextInput, .stFileUploader {
+        border-radius: 5px;
+        margin-bottom: 20px;
+    }
+    .stDataFrame {
+        border-radius: 10px;
+        box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
     }
     </style>
 """, unsafe_allow_html=True)
@@ -204,7 +227,7 @@ elif st.session_state.rol == "Usuario":
         st.subheader("📊 Resultados")
         if not resultado.empty:
             total = resultado["numero_matriculados"].sum()
-            st.markdown(f"<h4 style='color:#2e7d32;'>👩‍🎓 Total de matriculados: <strong>{int(total):,}</strong></h4>", unsafe_allow_html=True)
+            st.markdown(f"<h4 style='color:#388e3c;'>👩‍🎓 Total de matriculados: <strong>{int(total):,}</strong></h4>", unsafe_allow_html=True)
             st.dataframe(resultado, use_container_width=True)
         else:
             st.warning("❌ No se encontraron resultados para los filtros aplicados.")
