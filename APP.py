@@ -11,8 +11,8 @@ cursor = conexion.cursor()
 cursor.execute('''
     CREATE TABLE IF NOT EXISTS usuarios (
         correo TEXT PRIMARY KEY,
-        password TEXT,
-        rol TEXT
+        password TEXT NOT NULL,
+        rol TEXT NOT NULL
     )
 ''')
 
@@ -39,6 +39,8 @@ def verificar_usuario(correo, password):
 
 # Función para registrar usuario con rol
 def registrar_usuario(correo, password, rol):
+    if not correo or not password or not rol:
+        return False  # No permitir campos vacíos
     try:
         cursor.execute('INSERT INTO usuarios (correo, password, rol) VALUES (?, ?, ?)', (correo, password, rol))
         conexion.commit()
@@ -46,7 +48,7 @@ def registrar_usuario(correo, password, rol):
     except sqlite3.IntegrityError:
         return False
 
-# Crear usuario administrador si no existe
+# Crear usuario administrador por defecto
 cursor.execute('SELECT * FROM usuarios WHERE correo = ?', ('admin@madi.com',))
 if not cursor.fetchone():
     cursor.execute('INSERT INTO usuarios (correo, password, rol) VALUES (?, ?, ?)', ('admin@madi.com', 'admin123', 'Administrador'))
@@ -96,7 +98,9 @@ if menu == "Registrarse":
     boton_registro = st.sidebar.button("Registrarse")
 
     if boton_registro:
-        if registrar_usuario(nuevo_correo, nueva_clave, rol):
+        if nuevo_correo.strip() == "" or nueva_clave.strip() == "":
+            st.sidebar.warning("⚠️ Por favor completa todos los campos.")
+        elif registrar_usuario(nuevo_correo.strip(), nueva_clave.strip(), rol):
             st.sidebar.success("✅ Registro exitoso. Ahora puedes iniciar sesión.")
         else:
             st.sidebar.warning("⚠️ Este correo ya está registrado.")
@@ -109,7 +113,7 @@ if menu == "Iniciar sesión":
     iniciar = st.sidebar.button("Iniciar sesión")
 
     if iniciar:
-        rol = verificar_usuario(correo, clave)
+        rol = verificar_usuario(correo.strip(), clave.strip())
         if rol:
             st.session_state.autenticado = True
             st.session_state.usuario = correo
@@ -159,7 +163,7 @@ if st.session_state.rol == "Administrador":
                     })
                     dfs.append(df_filtrado)
                 else:
-                    st.warning(f"⚠️ El archivo '{archivo.name}' no tiene suficientes columnas.")
+                    st.warning(f"⚠️ El archivo '{archivo.name}' no tiene suficientes columnas requeridas.")
             except Exception as e:
                 st.error(f"❌ Error leyendo el archivo '{archivo.name}': {e}")
 
@@ -203,7 +207,7 @@ elif st.session_state.rol == "Usuario":
             st.markdown(f"<h4 style='color:#2e7d32;'>👩‍🎓 Total de matriculados: <strong>{int(total):,}</strong></h4>", unsafe_allow_html=True)
             st.dataframe(resultado, use_container_width=True)
         else:
-            st.warning("❌ No se encontraron resultados con esos filtros.")
+            st.warning("❌ No se encontraron resultados para los filtros aplicados.")
 
 # Pie de página
 st.markdown("""
