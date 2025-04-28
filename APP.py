@@ -34,13 +34,13 @@ def verificar_usuario(correo, password):
     cursor.execute('SELECT correo, password, rol FROM usuarios WHERE correo = ?', (correo,))
     user = cursor.fetchone()
     if user and user[1] == password:
-        return user[2]  # rol
+        return user[2]
     return None
 
-# Función para registrar usuario
-def registrar_usuario(correo, password):
+# Función para registrar usuario con rol
+def registrar_usuario(correo, password, rol):
     try:
-        cursor.execute('INSERT INTO usuarios (correo, password, rol) VALUES (?, ?, ?)', (correo, password, 'Usuario'))
+        cursor.execute('INSERT INTO usuarios (correo, password, rol) VALUES (?, ?, ?)', (correo, password, rol))
         conexion.commit()
         return True
     except sqlite3.IntegrityError:
@@ -52,9 +52,28 @@ if not cursor.fetchone():
     cursor.execute('INSERT INTO usuarios (correo, password, rol) VALUES (?, ?, ?)', ('admin@madi.com', 'admin123', 'Administrador'))
     conexion.commit()
 
+# Estilos personalizados
+st.markdown("""
+    <style>
+    body {
+        background-color: #f3e5f5;
+    }
+    .stButton>button {
+        background-color: #8e24aa;
+        color: white;
+    }
+    .stSelectbox, .stTextInput, .stFileUploader, .stDataFrame {
+        background-color: #f8bbd0;
+    }
+    h1, h3, p, h4 {
+        color: #6a1b9a;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 # Pantalla de inicio
 st.markdown("""
-    <h1 style='color:#6a1b9a;text-align:center;'>📊 MADI</h1>
+    <h1 style='text-align:center;'>📊 MADI</h1>
     <h3 style='text-align:center;'>Módulo de Análisis de Datos Institucionales</h3>
     <p style='text-align:center;'>Visualiza y analiza datos de matrículas universitarias en Colombia</p>
 """, unsafe_allow_html=True)
@@ -66,17 +85,18 @@ if "autenticado" not in st.session_state:
     st.session_state.rol = None
 
 # Menú de la barra lateral
-menu = st.sidebar.radio("Selecciona una opción", ["Iniciar sesión", "Registrarse"])
+menu = st.sidebar.radio("📋 Menú", ["Iniciar sesión", "Registrarse"])
 
-# Registro
+# Registro de usuarios
 if menu == "Registrarse":
     st.sidebar.subheader("📝 Crear una cuenta")
-    nuevo_correo = st.sidebar.text_input("Correo electrónico")
-    nueva_clave = st.sidebar.text_input("Contraseña", type="password")
+    nuevo_correo = st.sidebar.text_input("📧 Correo electrónico")
+    nueva_clave = st.sidebar.text_input("🔒 Contraseña", type="password")
+    rol = st.sidebar.selectbox("🎖️ Selecciona rol", ["Usuario", "Administrador"])
     boton_registro = st.sidebar.button("Registrarse")
 
     if boton_registro:
-        if registrar_usuario(nuevo_correo, nueva_clave):
+        if registrar_usuario(nuevo_correo, nueva_clave, rol):
             st.sidebar.success("✅ Registro exitoso. Ahora puedes iniciar sesión.")
         else:
             st.sidebar.warning("⚠️ Este correo ya está registrado.")
@@ -84,8 +104,8 @@ if menu == "Registrarse":
 # Inicio de sesión
 if menu == "Iniciar sesión":
     st.sidebar.subheader("🔐 Iniciar sesión")
-    correo = st.sidebar.text_input("Correo electrónico")
-    clave = st.sidebar.text_input("Contraseña", type="password")
+    correo = st.sidebar.text_input("📧 Correo electrónico", key="login_email")
+    clave = st.sidebar.text_input("🔒 Contraseña", type="password", key="login_password")
     iniciar = st.sidebar.button("Iniciar sesión")
 
     if iniciar:
@@ -96,12 +116,12 @@ if menu == "Iniciar sesión":
             st.session_state.rol = rol
             st.success(f"Bienvenido {correo} ({rol})")
         else:
-            st.sidebar.error("Correo o contraseña incorrectos.")
+            st.sidebar.error("❌ Correo o contraseña incorrectos.")
 
 if not st.session_state.autenticado:
     st.stop()
 
-# Función para cargar datos en la base
+# Función para cargar datos
 def cargar_datos(df):
     for _, fila in df.iterrows():
         cursor.execute('''
@@ -113,16 +133,12 @@ def cargar_datos(df):
 # Zona de administración
 if st.session_state.rol == "Administrador":
     st.subheader("🛠️ Zona de administración")
-    archivos = st.file_uploader("📄 Subir uno o más archivos Excel con datos de matrícula", type=["xlsx"], accept_multiple_files=True)
+    archivos = st.file_uploader("📄 Subir archivos Excel", type=["xlsx"], accept_multiple_files=True)
 
     if archivos:
         columnas_deseadas = [
-            "AÑO",
-            "INSTITUCIÓN DE EDUCACIÓN SUPERIOR (IES)",
-            "PROGRAMA ACADÉMICO",
-            "SEMESTRE",
-            "SEXO",
-            "MATRICULADOS"
+            "AÑO", "INSTITUCIÓN DE EDUCACIÓN SUPERIOR (IES)",
+            "PROGRAMA ACADÉMICO", "SEMESTRE", "SEXO", "MATRICULADOS"
         ]
 
         dfs = []
@@ -133,8 +149,7 @@ if st.session_state.rol == "Administrador":
                 columnas_encontradas = [col for col in columnas_deseadas if col in df.columns]
 
                 if len(columnas_encontradas) >= 4:
-                    df_filtrado = df[columnas_encontradas]
-                    df_filtrado = df_filtrado.rename(columns={
+                    df_filtrado = df[columnas_encontradas].rename(columns={
                         "AÑO": "Año",
                         "INSTITUCIÓN DE EDUCACIÓN SUPERIOR (IES)": "Universidad",
                         "PROGRAMA ACADÉMICO": "Programa",
@@ -158,7 +173,7 @@ if st.session_state.rol == "Administrador":
 elif st.session_state.rol == "Usuario":
     st.subheader("🔍 Consulta interactiva de matrículas")
 
-    # Cargar los datos desde la base
+    # Cargar los datos
     df = pd.read_sql_query('SELECT * FROM datos_matricula', conexion)
 
     if df.empty:
@@ -172,7 +187,7 @@ elif st.session_state.rol == "Usuario":
                 universidad = st.selectbox("🏫 Universidad", sorted(df["universidad"].dropna().unique()))
             with col3:
                 programa = st.selectbox("📚 Programa", sorted(df["programa"].dropna().unique()))
-            semestre = st.selectbox("📅 Semestre", sorted(df["semestre"].dropna().unique()))
+            semestre = st.selectbox("📆 Semestre", sorted(df["semestre"].dropna().unique()))
 
         filtro = (
             (df["año"] == año) &
