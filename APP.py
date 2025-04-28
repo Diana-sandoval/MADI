@@ -1,23 +1,50 @@
 import os
+import sqlite3
 import pandas as pd
 import streamlit as st
 
-# Ruta donde se guardarán los archivos cargados
-ruta_archivos = "archivos_cargados"
+# Conexión a la base de datos SQLite
+conexion = sqlite3.connect('madi.db', check_same_thread=False)
+cursor = conexion.cursor()
 
-# Verifica si la carpeta de archivos existe, si no, la crea
-if not os.path.exists(ruta_archivos):
-    os.makedirs(ruta_archivos)
+# Crear tablas si no existen
+cursor.execute('''
+    CREATE TABLE IF NOT EXISTS usuarios (
+        correo TEXT PRIMARY KEY,
+        password TEXT,
+        rol TEXT
+    )
+''')
 
-# Simulación de base de datos de usuarios
-if "usuarios" not in st.session_state:
-    st.session_state.usuarios = {
-        "admin@madi.com": {"password": "admin123", "rol": "Administrador"}
-    }
+cursor.execute('''
+    CREATE TABLE IF NOT EXISTS datos_matricula (
+        año INTEGER,
+        universidad TEXT,
+        programa TEXT,
+        semestre TEXT,
+        sexo TEXT,
+        numero_matriculados INTEGER
+    )
+''')
 
-# Función para hashear contraseñas (opcional, puedes usarla si quieres encriptar)
-def hashear(texto):
-    return hashlib.sha256(texto.encode()).hexdigest()
+conexion.commit()
+
+# Función para verificar usuario
+def verificar_usuario(correo, password):
+    cursor.execute('SELECT correo, password, rol FROM usuarios WHERE correo = ?', (correo,))
+    user = cursor.fetchone()
+    if user and user[1] == password:
+        return user[2]  # rol
+    return None
+
+# Función para registrar usuario
+def registrar_usuario(correo, password):
+    try:
+        cursor.execute('INSERT INTO usuarios (correo, password, rol) VALUES (?, ?, ?)', (correo, password, 'Usuario'))
+        conexion.commit()
+        return True
+    except sqlite3.IntegrityError:
+        return False
 
 # Pantalla de inicio
 st.markdown("""
@@ -26,14 +53,16 @@ st.markdown("""
     <p style='text-align:center;'>Visualiza y analiza datos de matrículas universitarias en Colombia</p>
 """, unsafe_allow_html=True)
 
-# Autenticación y registro
-menu = st.sidebar.radio("Selecciona una opción", ["Iniciar sesión", "Registrarse"])
-
+# Variables de sesión
 if "autenticado" not in st.session_state:
     st.session_state.autenticado = False
     st.session_state.usuario = None
     st.session_state.rol = None
 
+# Menú de la barra lateral
+menu = st.sidebar.radio("Selecciona una opción", ["Iniciar sesión", "Registrarse"])
+
+# Registro
 if menu == "Registrarse":
     st.sidebar.subheader("📝 Crear una cuenta")
     nuevo_correo = st.sidebar.text_input("Correo electrónico")
@@ -41,15 +70,12 @@ if menu == "Registrarse":
     boton_registro = st.sidebar.button("Registrarse")
 
     if boton_registro:
-        if nuevo_correo in st.session_state.usuarios:
-            st.sidebar.warning("⚠️ Este correo ya está registrado.")
-        else:
-            st.session_state.usuarios[nuevo_correo] = {
-                "password": nueva_clave,
-                "rol": "Usuario"
-            }
+        if registrar_usuario(nuevo_correo, nueva_clave):
             st.sidebar.success("✅ Registro exitoso. Ahora puedes iniciar sesión.")
+        else:
+            st.sidebar.warning("⚠️ Este correo ya está registrado.")
 
+# Inicio de sesión
 if menu == "Iniciar sesión":
     st.sidebar.subheader("🔐 Iniciar sesión")
     correo = st.sidebar.text_input("Correo electrónico")
@@ -57,27 +83,33 @@ if menu == "Iniciar sesión":
     iniciar = st.sidebar.button("Iniciar sesión")
 
     if iniciar:
-        if correo in st.session_state.usuarios and clave == st.session_state.usuarios[correo]["password"]:
+        rol = verificar_usuario(correo, clave)
+        if rol:
             st.session_state.autenticado = True
             st.session_state.usuario = correo
-            st.session_state.rol = st.session_state.usuarios[correo]["rol"]
-            st.success(f"Bienvenido {correo} ({st.session_state.rol})")
+            st.session_state.rol = rol
+            st.success(f"Bienvenido {correo} ({rol})")
         else:
-            st.sidebar.error("Correo o contraseña incorrectos")
+            st.sidebar.error("Correo o contraseña incorrectos.")
 
 if not st.session_state.autenticado:
     st.stop()
 
-if "datos" not in st.session_state:
-    st.session_state["datos"] = None
+# Función para cargar datos en la base
+def cargar_datos(df):
+    for _, fila in df.iterrows():
+        cursor.execute('''
+            INSERT INTO datos_matricula (año, universidad, programa, semestre, sexo, numero_matriculados)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (fila['Año'], fila['Universidad'], fila['Programa'], fila['Semestre'], fila['Sexo'], fila['Número de matriculados']))
+    conexion.commit()
 
-# Administrador: subir múltiples archivos Excel
+# Zona de administración
 if st.session_state.rol == "Administrador":
     st.subheader("🛠️ Zona de administración")
     archivos = st.file_uploader("📄 Subir uno o más archivos Excel con datos de matrícula", type=["xlsx"], accept_multiple_files=True)
 
     if archivos:
-        dfs = []
         columnas_deseadas = [
             "AÑO",
             "INSTITUCIÓN DE EDUCACIÓN SUPERIOR (IES)",
@@ -87,17 +119,13 @@ if st.session_state.rol == "Administrador":
             "MATRICULADOS"
         ]
 
+        dfs = []
         for archivo in archivos:
-            # Guardar el archivo en el sistema de archivos
-            archivo_path = os.path.join(ruta_archivos, archivo.name)
-            with open(archivo_path, "wb") as f:
-                f.write(archivo.getbuffer())
-            
-            # Cargar el archivo para procesarlo
             try:
-                df = pd.read_excel(archivo_path)
+                df = pd.read_excel(archivo)
                 df.columns = df.columns.str.strip().str.upper()
                 columnas_encontradas = [col for col in columnas_deseadas if col in df.columns]
+
                 if len(columnas_encontradas) >= 4:
                     df_filtrado = df[columnas_encontradas]
                     df_filtrado = df_filtrado.rename(columns={
@@ -110,46 +138,47 @@ if st.session_state.rol == "Administrador":
                     })
                     dfs.append(df_filtrado)
                 else:
-                    st.warning(f"⚠️ El archivo '{archivo.name}' no contiene suficientes columnas requeridas.")
+                    st.warning(f"⚠️ El archivo '{archivo.name}' no tiene suficientes columnas.")
             except Exception as e:
-                st.error(f"❌ Error al leer el archivo '{archivo.name}': {e}")
+                st.error(f"❌ Error leyendo el archivo '{archivo.name}': {e}")
 
         if dfs:
             df_consolidado = pd.concat(dfs, ignore_index=True)
-            st.session_state["datos"] = df_consolidado
-            st.success("✅ Archivos cargados y consolidados correctamente")
+            cargar_datos(df_consolidado)
+            st.success("✅ Datos cargados exitosamente.")
             st.dataframe(df_consolidado.head(), use_container_width=True)
 
-# Usuario: consulta interactiva
+# Zona de usuario
 elif st.session_state.rol == "Usuario":
     st.subheader("🔍 Consulta interactiva de matrículas")
 
-    if st.session_state["datos"] is None:
-        st.info("📊 Aún no se han cargado datos. Espera a que el administrador suba el archivo.")
-    else:
-        df = st.session_state["datos"]
+    # Cargar los datos desde la base
+    df = pd.read_sql_query('SELECT * FROM datos_matricula', conexion)
 
+    if df.empty:
+        st.info("📊 No hay datos disponibles aún.")
+    else:
         with st.expander("🔎 Filtros de búsqueda", expanded=True):
             col1, col2, col3 = st.columns(3)
             with col1:
-                año = st.selectbox("📅 Año", sorted(df["Año"].dropna().unique()))
+                año = st.selectbox("📅 Año", sorted(df["año"].dropna().unique()))
             with col2:
-                universidad = st.selectbox("🏫 Universidad", sorted(df["Universidad"].dropna().unique()))
+                universidad = st.selectbox("🏫 Universidad", sorted(df["universidad"].dropna().unique()))
             with col3:
-                programa = st.selectbox("📚 Programa", sorted(df["Programa"].dropna().unique()))
-            semestre = st.selectbox("📅 Semestre", sorted(df["Semestre"].dropna().unique()))
+                programa = st.selectbox("📚 Programa", sorted(df["programa"].dropna().unique()))
+            semestre = st.selectbox("📅 Semestre", sorted(df["semestre"].dropna().unique()))
 
         filtro = (
-            (df["Año"] == año) &
-            (df["Universidad"] == universidad) &
-            (df["Programa"] == programa) &
-            (df["Semestre"] == semestre)
+            (df["año"] == año) &
+            (df["universidad"] == universidad) &
+            (df["programa"] == programa) &
+            (df["semestre"] == semestre)
         )
         resultado = df[filtro]
 
         st.subheader("📊 Resultados")
         if not resultado.empty:
-            total = resultado["Número de matriculados"].sum()
+            total = resultado["numero_matriculados"].sum()
             st.markdown(f"<h4 style='color:#2e7d32;'>👩‍🎓 Total de matriculados: <strong>{int(total):,}</strong></h4>", unsafe_allow_html=True)
             st.dataframe(resultado, use_container_width=True)
         else:
