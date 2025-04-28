@@ -54,10 +54,19 @@ def registrar_usuario(correo, password, rol, cursor):
     if not correo or not password or not rol:
         return False  # No permitir campos vacíos
     try:
+        # Verificar si el correo ya está registrado
+        cursor.execute('SELECT COUNT(*) FROM usuarios WHERE correo = ?', (correo,))
+        if cursor.fetchone()[0] > 0:
+            return False  # El correo ya está registrado
+
+        # Si el correo no existe, proceder a insertar el nuevo usuario
         cursor.execute('INSERT INTO usuarios (correo, password, rol) VALUES (?, ?, ?)', (correo, password, rol))
         cursor.connection.commit()
         return True
-    except sqlite3.IntegrityError:
+    except sqlite3.Error as e:
+        # Si ocurre un error, hacer un rollback y mostrar el error
+        cursor.connection.rollback()
+        st.error(f"❌ Error al registrar el usuario: {e}")
         return False
 
 # Crear usuario administrador por defecto si no existe
