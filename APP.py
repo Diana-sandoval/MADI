@@ -46,6 +46,12 @@ def registrar_usuario(correo, password):
     except sqlite3.IntegrityError:
         return False
 
+# Crear usuario administrador si no existe
+cursor.execute('SELECT * FROM usuarios WHERE correo = ?', ('admin@madi.com',))
+if not cursor.fetchone():
+    cursor.execute('INSERT INTO usuarios (correo, password, rol) VALUES (?, ?, ?)', ('admin@madi.com', 'admin123', 'Administrador'))
+    conexion.commit()
+
 # Pantalla de inicio
 st.markdown("""
     <h1 style='color:#6a1b9a;text-align:center;'>📊 MADI</h1>
